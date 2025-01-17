@@ -2,8 +2,7 @@
 var mouseXC, mouseYC = 0;
 var dimensaoCanvas = 400;
 
-var arestas = null;
-var particulas = null;
+var cena = null;
 
 function setup() {
   createCanvas(dimensaoCanvas, dimensaoCanvas);
@@ -11,20 +10,21 @@ function setup() {
   let w2 = width / 2;
   let h2 = height / 2;
 
-  arestas = [new Aresta(new Vet2(-w2, h2), new Vet2(w2, h2)),
-  new Aresta(new Vet2(w2, h2), new Vet2(w2, -h2)),
-  new Aresta(new Vet2(w2, -h2), new Vet2(-w2, -h2)),
-  new Aresta(new Vet2(-w2, -h2), new Vet2(-w2, h2))];
+  let arestas = [new Aresta(new Vet2(-w2, h2), new Vet2(w2, h2)),
+                 new Aresta(new Vet2(w2, h2), new Vet2(w2, -h2)),
+                 new Aresta(new Vet2(w2, -h2), new Vet2(-w2, -h2)),
+                 new Aresta(new Vet2(-w2, -h2), new Vet2(-w2, h2))];
 
-  particulas = [new Particula(new Vet2(0, 0), new Vet2(13, 10)),
-  new Particula(new Vet2(0, 0), new Vet2(0, 13)),
-  new Particula(new Vet2(0, 0), new Vet2(4, 20)),
-  new Particula(new Vet2(0, 0), new Vet2(10, 30)),
-  new Particula(new Vet2(0, 0), new Vet2(100, 12))];
+  let particulas = [new Particula(new Vet2(0, 0), new Vet2(13, 10)),
+                    new Particula(new Vet2(0, 0), new Vet2(0, 13)),
+                    new Particula(new Vet2(0, 0), new Vet2(4, 20)),
+                    new Particula(new Vet2(0, 0), new Vet2(10, 30)),
+                    new Particula(new Vet2(0, 0), new Vet2(100, 12))];
+  cena = new Cena(arestas, particulas);
 }
 
 function mouseClicked() {
-  arestas.push(new Aresta(new Vet2(random(-width, width), random(-height, height)), new Vet2(random(-width, width), random(-height, height))));
+  cena.arestas.push(new Aresta(new Vet2(random(-width, width), random(-height, height)), new Vet2(random(-width, width), random(-height, height))));
 }
 
 class Vet2 {
@@ -238,57 +238,73 @@ class Particula {
   }
 }
 
+class Cena {
+  constructor(a, p) {
+    this.arestas = a;
+    this.particulas = p;
+  }
+
+  // Retorna true se há colisão entre partícula e aresta
+  colisao(aresta, particula) {
+    let novaPosicao = particula.pos.somar(particula.vel); // Posição da partícula após deslocamento
+    return Vet2.intersecao(particula.pos, novaPosicao, aresta.inicio, aresta.fim);
+  }
+
+  desenhar() {
+    // Desenha partículas
+    for (let i = 0; i < this.particulas.length; i++) {
+      texto(i, this.particulas[i].pos.x + 5, this.particulas[i].pos.y + 5);
+      this.particulas[i].desenhar();
+    }
+
+    // Desenha arestas e verifica interseção com partículas
+    let ai = null; // i-ésima aresta
+    let pj = null; // j-ésima partícula
+    let particulasColisao = {}; // chave: índice da partícula que colidiu, valor: aresta onde colisão ocorreu
+
+    for (let i = 0; i < this.arestas.length; i++) {
+      ai = this.arestas[i];
+
+      for (let j = 0; j < this.particulas.length; j++) {
+        pj = this.particulas[j];
+
+        if (this.colisao(ai, pj)) {
+          // Adiciona índice da partícula e aresta onde colisão ocorreu ao dicionário
+          particulasColisao[j] = ai;
+          stroke(180);
+        } else {
+          stroke(0);
+        }
+        // Desenha i-ésima aresta
+        ai.desenhar();
+      }
+    }
+
+    for (let i = 0; i < this.particulas.length; i++) {
+      let p = this.particulas[i];
+
+      if (!particulasColisao.hasOwnProperty(i)) {
+        // Partícula p não colidiu: realiza movimento
+        p.mover();
+      } else {
+        // Partícula p colidiu: atualiza sua velocidade
+        let arestaColisao = particulasColisao[i];
+        let n = arestaColisao.fim.subtrair(arestaColisao.inicio).rotacionar90(); // Normal à aresta onde houve colisão
+
+        p.vel = p.vel.reacao(n);
+        p.vel.pos = p.pos;
+      }
+    }
+  }
+}
+
 function draw() {
   // desenha o fundo e configura o sistema cartesiano, simplificando o
   // processo de desenho das formas na tela
   goCartesian(false);
 
-  // Desenhar partícula
+  cena.desenhar();
 
-  for (let i = 0; i < particulas.length; i++) {
-    texto(i, particulas[i].pos.x + 5, particulas[i].pos.y + 5);
-    particulas[i].desenhar();
-  }
-
-  let ai = null;
-  let pj = null;
-  let n = null;
-
-  let particulasColisao = [];
-  // Desenha arestas
-  for (let i = 0; i < arestas.length; i++) {
-    ai = arestas[i]; // i-ésima aresta
-
-    for (let j = 0; j < particulas.length; j++) {
-      pj = particulas[j];
-      // Posição da partícula após deslocamento
-      let novaPosicao = pj.pos.somar(pj.vel);
-
-      // Verifica se há interseção entre as retas representadas pelos pontos da posição atual, nova posição e extremidades da aresta atual
-      if (Vet2.intersecao(pj.pos, novaPosicao, ai.inicio, ai.fim)) {
-        // Obtém vetor normal à aresta onde houve colisão
-        n = ai.fim.subtrair(ai.inicio).rotacionar90();
-        // Atualiza a partícula envolvida na colisão
-        particulasColisao.push(pj);
-        stroke(180);
-      } else {
-        stroke(0);
-      }
-      // Desenha i-ésima aresta
-      ai.desenhar();
-    }
-  }
-
-  for (let i = 0; i < particulas.length; i++) {
-    let p = particulas[i];
-
-    if (!particulasColisao.includes(p)) {
-      p.mover();
-    } else {
-      p.vel = p.vel.reacao(n);
-      p.vel.pos = p.pos;
-    }
-  }
   frameRate(8);
 }
 
